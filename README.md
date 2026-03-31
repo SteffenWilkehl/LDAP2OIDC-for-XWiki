@@ -15,8 +15,19 @@ A key advantage of this migration script is that it modifies the user objects to
 ## Prerequisites
 
 * Linux/Unix environment with `bash`
-* `curl`
+* **curl** (see installation below)
 * Active XWiki instance with admin access
+
+### Installing curl
+If `curl` is not already installed, use the command for your distribution:
+
+| Distribution | Command |
+| :--- | :--- |
+| **Debian / Ubuntu / Kali** | `sudo apt update && sudo apt install curl` |
+| **CentOS / RHEL / Fedora** | `sudo dnf install curl` (or `yum`) |
+| **Arch Linux** | `sudo pacman -S curl` |
+| **openSUSE** | `sudo zypper install curl` |
+| **Alpine** | `apk add curl` |
 
 ## Usage
 
