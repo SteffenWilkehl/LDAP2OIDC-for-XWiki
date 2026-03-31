@@ -1,43 +1,30 @@
 #!/usr/bin/env bash
 
-#url="http://XWIKIURL.com:8080/xwiki"
-#issuer="https://OIDC.ISSUER.com"
-#xwikiuser="admin"
-#xwikipassword="admin"
-#postgresuser="postgres"
-
 set -o errexit
 set -o pipefail
 set -o nounset
 
-while getopts "h?u:i:p:" opt; do
+# Das fehlende 'x:' in getopts wurde ergänzt
+while getopts "hu:x:i:p:" opt; do
   case $opt in
     u)
-      #echo "-u was triggered, Parameter: $OPTARG"
       xwikiuser=$OPTARG
       ;;
     x)
-      #echo "-a was triggered, Parameter: $OPTARG"
       url=$OPTARG
       ;;
     i)
-      #echo "-a was triggered, Parameter: $OPTARG"
       issuer=$OPTARG
       ;;
     p)
-      #echo "-a was triggered, Parameter: $OPTARG"
       xwikipassword=$OPTARG
       ;;
-    h)
+    h|\?)
       echo "-u    Xwiki Admin Username"
       echo "-x    Xwiki URL"
       echo "-i    OpenID Connect Issuer"
       echo "-p    Xwiki Admin password"
       echo "-h    help"
-      exit 1
-      ;;
-    \?)
-      echo "Invalid option: -$OPTARG" >&2
       exit 1
       ;;
     :)
@@ -47,28 +34,26 @@ while getopts "h?u:i:p:" opt; do
   esac
 done
 
-
-if [  -z ${xwikiuser+x} ]; then
+# Deine ursprüngliche, korrekte Logik für set -o nounset
+if [ -z ${xwikiuser+x} ]; then
   read -s -r -p "Please enter XWIKI Admin username: " xwikiuser
   echo ""
 fi
 
-if [  -z ${xwikipassword+x} ]; then
+if [ -z ${xwikipassword+x} ]; then
   read -s -r -p "Please enter XWiki Admin password: " xwikipassword
   echo ""
 fi
 
-if [  -z ${url+x} ]; then
+if [ -z ${url+x} ]; then
   read -s -r -p "Please enter XWiki URL: " url
   echo ""
 fi
 
-if [  -z ${issuer+x} ]; then
+if [ -z ${issuer+x} ]; then
   read -s -r -p "Please enter OpenID Connect Issuer: " issuer
   echo ""
 fi
-
-
 
 
 _get_random_guid(){
@@ -79,43 +64,32 @@ _get_random_guid(){
   echo "${random1}-${random2}-${random3}-${random4}"
 }
 
-_get_users_from_postgres(){
-  users=$(sudo -u ${postgresuser} psql  xwiki  --no-align --no-psqlrc  --tuples-only --command="select substring(xwo_name from 7 for 30) from xwikiobjects where xwo_classname = 'XWiki.LDAPProfileClass';")
-}
-
 _get_users_from_rest(){
-  users=(`curl --silent --show-error --fail --user "${xwikiuser}":"${xwikipassword}" \
+  users=($(curl --silent --show-error --fail --user "${xwikiuser}:${xwikipassword}" \
                --url "${url}/rest/wikis/xwiki/classes/XWiki.LDAPProfileClass/objects" \
-               | grep -oPm1 "(?<=<pageName>)[^<]+"`)
+               | grep -oPm1 "(?<=<pageName>)[^<]+"))
 }
-
 
 _get_users_from_rest
 
 
-
-
-
-
 # check if there are LDAP user
-if [ "${#users[@]}" == 0 ];
-then
+if [ "${#users[@]}" == 0 ]; then
   echo "0 LDAP Users found"
   exit 2
 fi
 
-
 echo "${#users[@]} LDAP Users found"
 
 
-for user in ${users[@]}
-do
+for user in "${users[@]}"; do
   subject=${user}
 
   # check if user is already converted
-  isdone=(`curl --show-error --silent --fail --user "${xwikiuser}":"${xwikipassword}" \
-                --url "${url}/rest/wikis/xwiki/spaces/XWiki/pages/${subject}/objects" | grep "XWiki.OIDC.UserClass" || true`)
-  if [ ! -z ${isdone+x} ]; then
+  isdone=$(curl --show-error --silent --fail --user "${xwikiuser}:${xwikipassword}" \
+                --url "${url}/rest/wikis/xwiki/spaces/XWiki/pages/${subject}/objects" | grep "XWiki.OIDC.UserClass" || true)
+                
+  if [ -n "${isdone}" ]; then
     echo "convert user: ${subject} was already done"
 
   else
@@ -124,44 +98,46 @@ do
 
     echo "convert user: ${subject} start"
 
+    xml=$(cat <<EOF
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<object xmlns="http://www.xwiki.org">
+<link href="${url}/rest/wikis/xwiki/spaces/XWiki/pages/${subject}/objects/XWiki.OIDC.UserClass/0" rel="self"/>
+<id>xwiki:XWiki.${subject}:${random_guid}</id>
+<guid>${random_guid}</guid>
+<pageId>xwiki:XWiki.${subject}</pageId>
+<pageVersion>1.1</pageVersion>
+<wiki>xwiki</wiki>
+<space>XWiki</space>
+<pageName>${subject}</pageName>
+<pageAuthor>XWiki.superadmin</pageAuthor>
+<className>XWiki.OIDC.UserClass</className>
+<number>0</number>
+<headline>${issuer}</headline>
+<property name="issuer" type="String">
+<link href="${url}/rest/wikis/xwiki/spaces/XWiki/pages/${subject}/objects/XWiki.OIDC.UserClass/0/properties/issuer" rel="self"/>
+<attribute name="name" value="issuer"/>
+<attribute name="prettyName" value="Issuer"/>
+<attribute name="unmodifiable" value="0"/>
+<attribute name="disabled" value="0"/>
+<attribute name="size" value="30"/>
+<attribute name="number" value="1"/>
+<value>${issuer}</value>
+</property>
+<property name="subject" type="String">
+<link href="${url}/rest/wikis/xwiki/spaces/XWiki/pages/${subject}/objects/XWiki.OIDC.UserClass/0/properties/subject" rel="self"/>
+<attribute name="name" value="subject"/>
+<attribute name="prettyName" value="Subject"/>
+<attribute name="unmodifiable" value="0"/>
+<attribute name="disabled" value="0"/>
+<attribute name="size" value="30"/>
+<attribute name="number" value="2"/>
+<value>${subject}</value>
+</property>
+</object>
+EOF
+)
 
-    xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-    <object xmlns="http://www.xwiki.org">
-    <link href="'${url}'/rest/wikis/xwiki/spaces/XWiki/pages/'${subject}'/objects/XWiki.OIDC.UserClass/0" rel="self"/>
-    <id>xwiki:XWiki.'${subject}':'${random_guid}'</id>
-    <guid>'${random_guid}'</guid>
-    <pageId>xwiki:XWiki.'${subject}'</pageId>
-    <pageVersion>1.1</pageVersion>
-    <wiki>xwiki</wiki>
-    <space>XWiki</space>
-    <pageName>'${subject}'</pageName>
-    <pageAuthor>XWiki.superadmin</pageAuthor>
-    <className>XWiki.OIDC.UserClass</className>
-    <number>0</number>
-    <headline>'${issuer}'</headline>
-    <property name="issuer" type="String">
-    <link href="'${url}'/rest/wikis/xwiki/spaces/XWiki/pages/'${subject}'/objects/XWiki.OIDC.UserClass/0/properties/issuer" rel="self"/>
-    <attribute name="name" value="issuer"/>
-    <attribute name="prettyName" value="Issuer"/>
-    <attribute name="unmodifiable" value="0"/>
-    <attribute name="disabled" value="0"/>
-    <attribute name="size" value="30"/>
-    <attribute name="number" value="1"/>
-    <value>'${issuer}'</value>
-    </property>
-    <property name="subject" type="String">
-    <link href="'${url}'/rest/wikis/xwiki/spaces/XWiki/pages/'${subject}'/objects/XWiki.OIDC.UserClass/0/properties/subject" rel="self"/>
-    <attribute name="name" value="subject"/>
-    <attribute name="prettyName" value="Subject"/>
-    <attribute name="unmodifiable" value="0"/>
-    <attribute name="disabled" value="0"/>
-    <attribute name="size" value="30"/>
-    <attribute name="number" value="2"/>
-    <value>'${subject}'</value>
-    </property>
-    </object>'
-
-    curl --silent --show-error --fail --user "${xwikiuser}":"${xwikipassword}" \
+    curl --silent --show-error --fail --user "${xwikiuser}:${xwikipassword}" \
           -X POST \
           -H "Content-type: application/xml" \
           -H "Accept: application/xml" \
