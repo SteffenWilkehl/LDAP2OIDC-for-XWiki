@@ -1,4 +1,4 @@
-# XWiki LDAP to OIDC Converter
+# LDAP2OIDC for XWiki
 
 > **Maintenance Note:** This script was developed for a specific enterprise migration in 2020. I no longer work with XWiki and do not actively maintain this repository. It is provided as-is as a reference for similar legacy migrations. PRs are welcome, but I do not provide support.
 
@@ -6,9 +6,11 @@ A Bash script to migrate existing XWiki users from LDAP to the XWiki OpenID Conn
 
 ## Background
 
-**Historically (ca. 2020):** When migrating an XWiki instance from LDAP to OIDC, the native plugin lacked auto-mapping features. This script was required to convert user profile objects to prevent permission loss and duplicate profiles.
+* **Historically (ca. 2020):** When migrating an XWiki instance from LDAP to OIDC, the native plugin lacked auto-mapping features. This script was required to convert user profile objects to prevent permission loss and duplicate profiles.
+* **Today:** Modern versions of the XWiki OIDC plugin can map users on their first login. However, this script is still useful for pre-migrations. It allows you to bulk-convert all user objects before switching to OIDC, ensuring all profiles and rights are mapped beforehand.
 
-**Today:** Modern versions of the XWiki OIDC plugin can map users on their first login. However, this script is still useful for pre-migrations. It allows you to bulk-convert all user objects before switching to OIDC, ensuring all profiles and rights are mapped beforehand.
+## Compatibility Note
+A key advantage of this migration script is that it modifies the user objects to include the necessary OIDC attributes without removing the legacy LDAP metadata. **As a result, the converted account objects remain compatible with both authentication methods.** This allows for a "soft" transition where both providers can be active or tested in parallel without breaking the user profile.
 
 ## Prerequisites
 
@@ -21,5 +23,6 @@ A Bash script to migrate existing XWiki users from LDAP to the XWiki OpenID Conn
 Run the script with the required parameters. If you omit them, the script will prompt you interactively.
 
 ### Syntax
+
 ```bash
 ./xwiki_ldap_to_oidc.sh -u <AdminUser> -p <AdminPassword> -x <XWikiURL> -i <OIDCIssuer>
