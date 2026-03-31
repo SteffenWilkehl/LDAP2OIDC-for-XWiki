@@ -4,7 +4,6 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-# Das fehlende 'x:' in getopts wurde ergänzt
 while getopts "hu:x:i:p:" opt; do
   case $opt in
     u)
