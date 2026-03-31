@@ -14,7 +14,6 @@ A Bash script to migrate existing XWiki users from LDAP to the XWiki OpenID Conn
 
 * Linux/Unix environment with `bash`
 * `curl`
-* `uuidgen` (optional, for clean UUID generation)
 * Active XWiki instance with admin access
 
 ## Usage
